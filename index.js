@@ -1,16 +1,19 @@
-require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = "YOUR_BOT_CLIENT_ID"; // put bot ID here
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.MessageContent
     ]
 });
 
-// Get rank from roles
+
+// -------------------- TAG SYSTEM --------------------
 function getTag(member) {
     if (!member) return "PLAYER";
 
@@ -21,19 +24,70 @@ function getTag(member) {
     return "PLAYER";
 }
 
-client.on("messageCreate", async (message) => {
 
-    if (message.author.bot) return;
+// -------------------- SLASH COMMANDS --------------------
+const commands = [
+    new SlashCommandBuilder()
+        .setName("tag")
+        .setDescription("Shows your rank tag"),
 
-    const tag = getTag(message.member);
+    new SlashCommandBuilder()
+        .setName("rank")
+        .setDescription("Shows your rank info")
+].map(cmd => cmd.toJSON());
 
-    const formatted = `[${tag}] ${message.author.username}: ${message.content}`;
 
-    // Delete original message (optional)
-    await message.delete().catch(() => {});
+// Register slash commands
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-    // Send formatted message
-    message.channel.send(formatted);
+async function registerCommands() {
+    try {
+        console.log("Registering slash commands...");
+
+        await rest.put(
+            Routes.applicationCommands(CLIENT_ID),
+            { body: commands }
+        );
+
+        console.log("Slash commands registered!");
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+
+// -------------------- BOT READY --------------------
+client.once("ready", () => {
+    console.log(`Logged in as ${client.user.tag}`);
 });
 
-client.login(process.env.TOKEN);
+
+// -------------------- SLASH COMMAND HANDLER --------------------
+client.on("interactionCreate", async interaction => {
+
+    if (!interaction.isChatInputCommand()) return;
+
+    const member = interaction.member;
+    const tag = getTag(member);
+
+    if (interaction.commandName === "tag") {
+
+        await interaction.reply({
+            content: `Your tag is: [${tag}]`,
+            ephemeral: true
+        });
+    }
+
+    if (interaction.commandName === "rank") {
+
+        await interaction.reply({
+            content: `Rank Info: [${tag}] ${interaction.user.username}`,
+            ephemeral: true
+        });
+    }
+});
+
+
+// -------------------- START BOT --------------------
+client.login(TOKEN);
+registerCommands();
